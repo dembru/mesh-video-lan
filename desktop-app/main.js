@@ -19,6 +19,19 @@ function createWindow() {
     startupMode = 'rx'
   }
 
+  const serverUrlArg =
+    args.find(arg =>
+      arg.startsWith('--server-url=')
+    )
+
+  const additionalArguments = [
+    `--startup-mode=${startupMode}`
+  ]
+
+  if (serverUrlArg) {
+    additionalArguments.push(serverUrlArg)
+  }
+
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -27,9 +40,7 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
 
-      additionalArguments: [
-        `--startup-mode=${startupMode}`
-      ]
+      additionalArguments
     }
   })
 

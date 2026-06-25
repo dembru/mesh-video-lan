@@ -16,21 +16,95 @@ io.on('connection', socket => {
 
   console.log('CONNECTED', socket.id)
 
-  socket.on('join-room', roomId => {
+  socket.on('join-room', (roomId, ack) => {
 
-    socket.roomId = roomId
+    if (!roomId || typeof roomId !== 'string') {
+      if (ack) {
+        ack({
+          ok: false,
+          error: 'roomId is required'
+        })
+      }
 
-    joinRoom(roomId, socket.id)
+      return
+    }
 
-    socket.join(roomId)
+    const nextRoomId = roomId.trim()
 
-    socket.to(roomId).emit('peer-joined')
+    if (!nextRoomId) {
+      if (ack) {
+        ack({
+          ok: false,
+          error: 'roomId is required'
+        })
+      }
 
-    console.log(socket.id, 'joined', roomId)
+      return
+    }
+
+    if (
+      socket.roomId &&
+      socket.roomId !== nextRoomId
+    ) {
+      leaveRoom(socket.roomId, socket.id)
+      socket.leave(socket.roomId)
+    }
+
+    socket.roomId = nextRoomId
+
+    const peers =
+      joinRoom(nextRoomId, socket.id)
+
+    socket.join(nextRoomId)
+
+    socket.to(nextRoomId).emit('peer-joined', {
+      peerId: socket.id
+    })
+
+    if (ack) {
+      ack({
+        ok: true,
+        roomId: nextRoomId,
+        peers
+      })
+    }
+
+    console.log(socket.id, 'joined', nextRoomId)
   })
 
   socket.on('signal', payload => {
-    socket.to(payload.roomId).emit('signal', payload.data)
+    if (!payload || !payload.roomId || !payload.data) {
+      return
+    }
+
+    socket.to(payload.roomId).emit('signal', {
+      from: socket.id,
+      data: payload.data
+    })
+  })
+
+  socket.on('leave-room', ack => {
+
+    if (socket.roomId) {
+      const previousRoomId = socket.roomId
+
+      leaveRoom(previousRoomId, socket.id)
+
+      socket.leave(previousRoomId)
+
+      socket.to(previousRoomId).emit('peer-left', {
+        peerId: socket.id,
+        intentional: true
+      })
+
+      socket.roomId = null
+    }
+
+    if (ack) {
+      ack({
+        ok: true
+      })
+    }
   })
 
   socket.on('disconnect', () => {
@@ -40,7 +114,10 @@ io.on('connection', socket => {
     }
 
     if (socket.roomId) {
-      socket.to(socket.roomId).emit('peer-left')
+      socket.to(socket.roomId).emit('peer-left', {
+        peerId: socket.id,
+        intentional: false
+      })
     }
 
     console.log('DISCONNECTED', socket.id)

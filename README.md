@@ -14,6 +14,7 @@ receiver mode it displays telemetry received from the connected peer.
 - LAN-oriented signaling with Socket.IO
 - Electron desktop client
 - Room-based peer matching
+- Resilient signaling reconnect with room rejoin
 - Simulated ECG waveform
 - Simulated vitals: heart rate, SpO2, and blood pressure
 - Transmitter and receiver startup modes
@@ -76,6 +77,18 @@ cd desktop-app
 npm start
 ```
 
+By default, the client connects to:
+
+```text
+http://localhost:3000
+```
+
+For a client running on another LAN machine, pass the signaling server address:
+
+```bash
+npm start -- --server-url=http://<server-ip>:3000
+```
+
 From the root directory, you can also run:
 
 ```bash
@@ -110,6 +123,28 @@ The role can also be toggled from the app UI.
 When a second peer joins the room, the clients exchange WebRTC signaling through
 the server and then communicate peer-to-peer.
 
+## Connection Resilience
+
+The signaling server is only used to discover peers and exchange WebRTC session
+messages. After the WebRTC peer connection is established, media and telemetry
+continue peer-to-peer.
+
+The client is designed to tolerate temporary signaling link loss:
+
+- Socket.IO reconnects indefinitely with capped retry delay and jitter.
+- A live WebRTC peer is preserved when the signaling socket disconnects.
+- The UI shows `SIGNAL LOST` when peer media may still be alive but signaling is
+  temporarily unavailable.
+- After signaling reconnects, the client rejoins the previous room with an
+  acknowledgement and retries if the room join times out.
+- Pending WebRTC signaling messages are queued while room membership is not yet
+  confirmed, then flushed after rejoin.
+- Intentional room leaves are separated from accidental disconnects so a short
+  server outage does not force both clients to tear down an active call.
+
+If the WebRTC peer connection itself fails, the app can renegotiate when both
+clients are back in the same room.
+
 ## Network Configuration
 
 The signaling server listens on port `3000`:
@@ -118,20 +153,32 @@ The signaling server listens on port `3000`:
 http://<server-ip>:3000
 ```
 
-The current client code contains a hard-coded signaling server URL in
-`desktop-app/renderer.js`. Update that URL to match the machine running the
-signaling server before connecting from another device.
+The desktop client defaults to `http://localhost:3000`. When the signaling
+server is on another machine, start the client with
+`--server-url=http://<server-ip>:3000`.
 
 This project intentionally configures WebRTC with no STUN or TURN servers. That
 keeps the prototype LAN-focused, but it means calls may fail across NATs,
 different networks, VPNs, or restrictive firewalls.
 
+## Development Checks
+
+There is no full automated test suite yet. For a quick syntax check of the
+authored JavaScript files, run:
+
+```bash
+node --check signaling-server/server.js
+node --check signaling-server/rooms.js
+node --check desktop-app/main.js
+node --check desktop-app/renderer.js
+node --check desktop-app/ui/controls.js
+```
+
 ## Notes
 
-- This is an MVP/prototype, not a hardened production app.
+- This is an MVP/prototype, not a fully hardened production app.
 - Electron is currently configured with Node integration enabled and context
   isolation disabled for simplicity.
 - The ECG and vitals data are simulated and should not be used for medical
   purposes.
 - There are no automated tests configured yet.
-

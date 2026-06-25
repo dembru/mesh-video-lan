@@ -15,15 +15,35 @@ const startupMode =
     ? startupArg.split('=')[1]
     : 'tx'
 
-// CHANGE SERVER IP
-const socket = io('http://100.108.242.36:3000', {
+const serverUrlArg =
+  process.argv.find(arg =>
+    arg.startsWith(
+      '--server-url='
+    )
+  )
+
+const signalingServerUrl =
+  serverUrlArg
+    ? serverUrlArg.split('=')[1]
+    : 'http://localhost:3000'
+
+console.log('SIGNALING SERVER:', signalingServerUrl)
+
+const socket = io(signalingServerUrl, {
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 2000,
+  reconnectionDelayMax: 10000,
+  randomizationFactor: 0.5,
   timeout: 5000
 })
 
 let reconnecting = false
+let signalingConnected = false
+let roomJoinTimer = null
+let joiningRoom = false
+let joinedRoomId = null
+let pendingSignals = []
 
 const localVideo = document.getElementById('localVideo')
 const remoteVideo = document.getElementById('remoteVideo')
@@ -181,7 +201,7 @@ fullscreenBtn.onclick = () => {
 leaveBtn.disabled = true
 updateUI()
 leaveBtn.onclick = () => {
-  cleanupPeer()
+  leaveRoom()
 }
 
 muteBtn.onclick = () => {
@@ -216,6 +236,8 @@ function cleanupPeer() {
     updateUI()
   }
 
+  pendingSignals = []
+
   remoteVideo.srcObject = null
 
   remoteEcgData = []
@@ -226,9 +248,17 @@ function cleanupPeer() {
   heartbeatFlash = 0
 }
 
+function clearRoomJoinTimer() {
+
+  if (roomJoinTimer) {
+    clearTimeout(roomJoinTimer)
+    roomJoinTimer = null
+  }
+}
+
 function updateUI() {
 
-  if (reconnecting) {
+  if (reconnecting && !isConnected) {
 
     joinBtn.innerText = 'RECONNECT'
     leaveBtn.disabled = true
@@ -240,7 +270,10 @@ function updateUI() {
 
     joinBtn.classList.add('connected')
 
-    joinBtn.innerText = 'CONNECTED'
+    joinBtn.innerText =
+      signalingConnected
+        ? 'CONNECTED'
+        : 'SIGNAL LOST'
 
     leaveBtn.disabled = false
 
@@ -569,26 +602,153 @@ setInterval(() => {
     localEcgData.shift()
   }
 
-  if (peer) {
+  if (
+    peer &&
+    peer.connected
+  ) {
 
-    peer.send(JSON.stringify({
+    try {
+      peer.send(JSON.stringify({
 
-      type: 'telemetry',
+        type: 'telemetry',
 
-      ecg: point,
+        ecg: point,
 
-      bpm: bpm,
+        bpm: bpm,
 
-      spo2: spo2,
+        spo2: spo2,
 
-      systolic: systolic,
+        systolic: systolic,
 
-      diastolic: diastolic
-    }))
+        diastolic: diastolic
+      }))
+    } catch (err) {
+      console.warn('TELEMETRY SEND FAILED:', err)
+    }
   }
 
 }, 16)
 
+
+function scheduleRoomJoin(delay = 1000) {
+
+  clearRoomJoinTimer()
+
+  if (!roomId) {
+    return
+  }
+
+  roomJoinTimer = setTimeout(() => {
+    joinCurrentRoom()
+  }, delay)
+}
+
+function joinCurrentRoom() {
+
+  if (
+    !roomId ||
+    !socket.connected ||
+    joiningRoom ||
+    joinedRoomId === roomId
+  ) {
+    return
+  }
+
+  joiningRoom = true
+
+  socket.timeout(5000).emit(
+    'join-room',
+    roomId,
+    (err, response) => {
+
+      joiningRoom = false
+
+      if (err || !response || !response.ok) {
+        console.warn(
+          'ROOM JOIN FAILED:',
+          err || response
+        )
+
+        scheduleRoomJoin(3000)
+        updateUI()
+        return
+      }
+
+      roomId = response.roomId
+      joinedRoomId = response.roomId
+      roomInput.value = roomId
+      reconnecting = false
+      flushPendingSignals()
+
+      updateUI()
+    }
+  )
+}
+
+function emitSignal(data) {
+
+  if (
+    socket.connected &&
+    joinedRoomId === roomId
+  ) {
+    socket.emit('signal', {
+      roomId,
+      data
+    })
+    return
+  }
+
+  pendingSignals.push(data)
+
+  if (pendingSignals.length > 20) {
+    pendingSignals.shift()
+  }
+}
+
+function flushPendingSignals() {
+
+  if (
+    !socket.connected ||
+    joinedRoomId !== roomId ||
+    pendingSignals.length === 0
+  ) {
+    return
+  }
+
+  const signals = pendingSignals
+  pendingSignals = []
+
+  signals.forEach(data => {
+    socket.emit('signal', {
+      roomId,
+      data
+    })
+  })
+}
+
+function leaveRoom() {
+
+  clearRoomJoinTimer()
+
+  const hadRoom = Boolean(roomId)
+
+  roomId = null
+  joinedRoomId = null
+
+  cleanupPeer()
+
+  if (
+    hadRoom &&
+    socket.connected
+  ) {
+    socket.timeout(3000).emit(
+      'leave-room',
+      () => {}
+    )
+  }
+
+  updateUI()
+}
 
 function createPeer(initiator) {
 
@@ -606,16 +766,20 @@ function createPeer(initiator) {
 
   peer.on('signal', data => {
 
-    socket.emit('signal', {
-      roomId,
-      data
-    })
+    emitSignal(data)
   })
 
 
   peer.on('data', raw => {
 
-    const msg = JSON.parse(raw)
+    let msg
+
+    try {
+      msg = JSON.parse(raw)
+    } catch (err) {
+      console.warn('INVALID PEER DATA:', err)
+      return
+    }
 
     if (msg.type === 'telemetry') {
 
@@ -660,6 +824,15 @@ function createPeer(initiator) {
     updateUI()
   })
 
+  peer.on('connect', () => {
+
+    console.log('PEER DATA CHANNEL CONNECTED')
+
+    isConnected = true
+
+    updateUI()
+  })
+
   peer.on('close', () => {
 
     console.log('PEER CLOSED')
@@ -677,31 +850,53 @@ function createPeer(initiator) {
 
 joinBtn.onclick = () => {
 
-  roomId = roomInput.value
+  const nextRoomId = roomInput.value.trim()
+
+  if (!nextRoomId) {
+    return
+  }
+
+  clearRoomJoinTimer()
+
+  roomId = nextRoomId
+  joinedRoomId = null
 
   cleanupPeer()
 
-  socket.emit('join-room', roomId)
+  if (socket.connected) {
+    joinCurrentRoom()
+  } else {
+    socket.connect()
+    scheduleRoomJoin(3000)
+  }
 
   console.log('JOINED ROOM:', roomId)
 }
 
 socket.off('peer-joined')
 
-socket.on('peer-joined', () => {
+socket.on('peer-joined', details => {
 
-  console.log('PEER JOINED')
+  console.log('PEER JOINED', details)
 
-  if (!peer) {
+  if (
+    !peer ||
+    !peer.connected
+  ) {
     createPeer(true)
   }
 })
 
 socket.off('signal')
 
-socket.on('signal', data => {
+socket.on('signal', payload => {
 
   console.log('SIGNAL RECEIVED')
+
+  const data =
+    payload && payload.data
+      ? payload.data
+      : payload
 
   if (!peer) {
     createPeer(false)
@@ -717,30 +912,68 @@ socket.on('signal', data => {
   }
 })
 
-socket.on('peer-left', () => {
+socket.on('peer-left', details => {
 
-  console.log('PEER LEFT')
+  console.log('PEER LEFT', details)
 
-  cleanupPeer()
+  if (
+    details &&
+    details.intentional
+  ) {
+    cleanupPeer()
+  }
 })
 
 
-socket.on('disconnect', () => {
+socket.on('disconnect', reason => {
 
   reconnecting = true
-  isConnected = false
+  signalingConnected = false
+  joinedRoomId = null
 
-  cleanupPeer()
-
+  console.warn('SIGNALING DISCONNECTED:', reason)
   updateUI()
 })
 
 socket.on('connect', () => {
 
+  signalingConnected = true
   reconnecting = false
 
   if (roomId) {
-    socket.emit('join-room', roomId)
+    joinCurrentRoom()
+  }
+
+  updateUI()
+})
+
+socket.on('connect_error', err => {
+
+  reconnecting = true
+  signalingConnected = false
+
+  console.warn('SIGNALING CONNECT ERROR:', err.message)
+
+  updateUI()
+})
+
+socket.io.on('reconnect_attempt', attempt => {
+
+  reconnecting = true
+  signalingConnected = false
+
+  console.log('SIGNALING RECONNECT ATTEMPT:', attempt)
+
+  updateUI()
+})
+
+socket.io.on('reconnect', () => {
+
+  signalingConnected = true
+  reconnecting = false
+
+  if (roomId) {
+    joinCurrentRoom()
   }
 
   updateUI()
@@ -749,21 +982,20 @@ socket.on('connect', () => {
 setInterval(() => {
 
   if (
-    reconnecting &&
     roomId &&
     socket.connected &&
-    !peer
+    joinedRoomId !== roomId &&
+    !joiningRoom
   ) {
 
-    socket.emit(
-      'join-room',
-      roomId
-    )
+    joinCurrentRoom()
   }
 
 }, 3000)
 
 window.addEventListener('beforeunload', () => {
+
+  clearRoomJoinTimer()
 
   cleanupPeer()
 
