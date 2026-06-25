@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Mesh Video LAN</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <div class="container">
+
+    <div class="topbar">
+
+      <h1>Mesh Video LAN</h1>
+
+      <input id="roomInput" placeholder="ROOM ID">
+
+      <button id="joinBtn">JOIN</button>
+
+      <button id="muteBtn">🎤</button>
+      <button id="cameraBtn">📷</button>
+      <button id="leaveBtn">LEAVE</button>
+
+      <button id="ecgBtn">ECG ON</button>
+
+      <button id="fullscreenBtn">
+        FULL ECG
+      </button>
+
+      <button id="roleBtn">
+        ROLE: TX
+      </button>
+
+    </div>
+
+    <div class="main-layout">
+
+
+      <div class="videos">
+
+        <div class="video-wrapper">
+          <div class="video-title">LOCAL</div>
+          <video id="localVideo" autoplay muted playsinline></video>
+        </div>
+
+        <div class="video-wrapper">
+          <div class="video-title">REMOTE</div>
+          <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+
+      </div>
+
+      <div class="ecg-container">
+        <canvas id="ecgCanvas"></canvas>
+      </div>
+
+
+    </div>
+
+    <script src="renderer.js"></script>
+
+</body>
+
+</html>

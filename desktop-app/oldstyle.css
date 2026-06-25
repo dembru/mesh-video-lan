@@ -1,0 +1,78 @@
+body {
+  margin: 0;
+  background: #1e1e1e;
+  color: white;
+  font-family: Arial;
+}
+
+.topbar {
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #2b2b2b;
+}
+
+input {
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  width: 220px;
+  background: #404040;
+  color: white;
+}
+
+button {
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: none;
+  background: #0078ff;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:disabled {
+  background: #555;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connected {
+  background: #d32f2f !important;
+}
+
+.toggled-off {
+  position: relative;
+  background: #444 !important;
+}
+
+.toggled-off::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  top: 50%;
+  width: 80%;
+  height: 3px;
+  background: red;
+  transform: rotate(-20deg);
+}
+
+.videos {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  height: calc(100vh - 80px);
+}
+
+video {
+  width: 50%;
+  background: black;
+  border-radius: 10px;
+  object-fit: cover;
+}

@@ -1,0 +1,8 @@
+{
+  "name": "mesh-video-lan",
+  "private": true,
+  "scripts": {
+    "server": "cd signaling-server && npm start",
+    "client": "cd desktop-app && npm start"
+  }
+}

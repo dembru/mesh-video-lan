@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Mesh Video LAN</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <div class="topbar">
+
+    <h1>Mesh Video LAN</h1>
+
+    <input id="roomInput" placeholder="ROOM ID">
+
+    <button id="joinBtn">JOIN</button>
+
+    <button id="muteBtn">MUTE</button>
+
+    <button id="cameraBtn">CAMERA</button>
+<button id="leaveBtn">LEAVE</button>
+
+  </div>
+
+  <div class="videos">
+
+    <div class="video-card">
+      <h2>LOCAL</h2>
+      <video id="localVideo" autoplay muted playsinline></video>
+    </div>
+
+    <div class="video-card">
+      <h2>REMOTE</h2>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="renderer.js"></script>
+
+</body>
+</html>
