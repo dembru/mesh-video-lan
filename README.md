@@ -145,6 +145,13 @@ The client is designed to tolerate temporary signaling link loss:
 If the WebRTC peer connection itself fails, the app can renegotiate when both
 clients are back in the same room.
 
+- When a peer rejoins after a network disruption, it initiates a new WebRTC
+  offer if existing peers are already in the room but no active connection
+  exists.
+- The `peer-joined` handler detects stale ICE connections (disconnected, failed,
+  or closed) and tears them down to force renegotiation, ensuring the local side
+  reconnects even if Simple Peer still reports the old peer as connected.
+
 ## Network Configuration
 
 The signaling server listens on port `3000`:

@@ -680,6 +680,15 @@ function joinCurrentRoom() {
       reconnecting = false
       flushPendingSignals()
 
+      // If peers are already in the room and we have no active connection, initiate
+      if (
+        response.peers &&
+        response.peers.length > 1 &&
+        (!peer || !peer.connected)
+      ) {
+        createPeer(true)
+      }
+
       updateUI()
     }
   )
@@ -879,10 +888,22 @@ socket.on('peer-joined', details => {
 
   console.log('PEER JOINED', details)
 
+  if (!peer || !peer.connected) {
+    createPeer(true)
+    return
+  }
+
+  // Peer exists and reports connected — check if ICE is actually alive
+  const iceState =
+    peer._pc &&
+    peer._pc.iceConnectionState
+
   if (
-    !peer ||
-    !peer.connected
+    iceState === 'disconnected' ||
+    iceState === 'failed' ||
+    iceState === 'closed'
   ) {
+    console.warn('STALE PEER DETECTED, RENEGOTIATING')
     createPeer(true)
   }
 })
