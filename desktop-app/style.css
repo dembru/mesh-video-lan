@@ -8,11 +8,66 @@ body {
 
 .main-layout {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: calc(100vh - 70px);
   gap: 6px;
   padding: 6px;
   box-sizing: border-box;
+}
+
+.wan-panel {
+  width: 140px;
+  flex-shrink: 0;
+  background: #2a2a2a;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wan-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #888;
+  letter-spacing: 1px;
+}
+
+.wan-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wan-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.wan-indicator.connected { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+.wan-indicator.available { background: #ff9800; box-shadow: 0 0 6px #ff9800; }
+.wan-indicator.disconnected { background: #f44336; box-shadow: 0 0 6px #f44336; }
+
+.wan-label {
+  font-size: 11px;
+  font-weight: bold;
+  color: #ccc;
+}
+
+.wan-status {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .videos {

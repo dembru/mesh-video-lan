@@ -32,9 +32,9 @@ console.log('SIGNALING SERVER:', signalingServerUrl)
 const socket = io(signalingServerUrl, {
   reconnection: true,
   reconnectionAttempts: Infinity,
-  reconnectionDelay: 2000,
-  reconnectionDelayMax: 10000,
-  randomizationFactor: 0.5,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 5000,
+  randomizationFactor: 0.3,
   timeout: 5000
 })
 
@@ -170,6 +170,7 @@ roleBtn.onclick = () => {
   localEcgData = []
   remoteEcgData = []
 
+  pollWanStatus()
   updateUI()
 }
 
@@ -669,7 +670,7 @@ function joinCurrentRoom() {
           err || response
         )
 
-        scheduleRoomJoin(3000)
+        scheduleRoomJoin(1500)
         updateUI()
         return
       }
@@ -876,7 +877,7 @@ joinBtn.onclick = () => {
     joinCurrentRoom()
   } else {
     socket.connect()
-    scheduleRoomJoin(3000)
+    scheduleRoomJoin(1500)
   }
 
   console.log('JOINED ROOM:', roomId)
@@ -1012,7 +1013,7 @@ setInterval(() => {
     joinCurrentRoom()
   }
 
-}, 3000)
+}, 1500)
 
 window.addEventListener('beforeunload', () => {
 
@@ -1022,3 +1023,78 @@ window.addEventListener('beforeunload', () => {
 
   socket.disconnect()
 })
+
+// WAN status panel
+
+const wanPanel = document.getElementById('wanPanel')
+const routerUrl = 'http://192.168.0.1'
+const routerAuth = 'admin:WA2108TA000261'
+
+const wanDeviceMap = {
+  'ethernet-wan': 'wanSatellite',
+  'mdm-4614753b': 'wan5g',
+  'wwan-2a:bf:c3:b0:38:fb:2_4G-1': 'wanWifi'
+}
+
+function updateWanPanel(devices) {
+  for (const [devKey, elemId] of Object.entries(wanDeviceMap)) {
+    const el = document.getElementById(elemId)
+    const dev = devices[devKey]
+    const indicator = el.querySelector('.wan-indicator')
+    const statusEl = el.querySelector('.wan-status')
+
+    indicator.className = 'wan-indicator'
+
+    if (!dev) {
+      statusEl.textContent = 'not found'
+      indicator.classList.add('disconnected')
+      continue
+    }
+
+    const state = dev.status && dev.status.connection_state
+    const summary = dev.status && dev.status.summary
+
+    statusEl.textContent = summary || state || '--'
+
+    if (state === 'connected') {
+      indicator.classList.add('connected')
+    } else if (summary === 'available') {
+      indicator.classList.add('available')
+    } else {
+      indicator.classList.add('disconnected')
+    }
+  }
+}
+
+async function pollWanStatus() {
+  if (!isTransmitter) {
+    wanPanel.style.display = 'none'
+    return
+  }
+
+  wanPanel.style.display = ''
+
+  try {
+    const resp = await fetch(routerUrl + '/api/status/wan/devices', {
+      headers: {
+        'Authorization': 'Basic ' + btoa(routerAuth)
+      }
+    })
+
+    const json = await resp.json()
+
+    if (json.success && json.data) {
+      updateWanPanel(json.data)
+    }
+  } catch (err) {
+    // Router unreachable — mark all disconnected
+    for (const elemId of Object.values(wanDeviceMap)) {
+      const el = document.getElementById(elemId)
+      el.querySelector('.wan-indicator').className = 'wan-indicator disconnected'
+      el.querySelector('.wan-status').textContent = 'unreachable'
+    }
+  }
+}
+
+pollWanStatus()
+setInterval(pollWanStatus, 5000)
